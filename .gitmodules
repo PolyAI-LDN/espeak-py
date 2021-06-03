@@ -1,0 +1,3 @@
+[submodule "espeak-sys"]
+	path = espeak-sys
+	url = git@github.com:ctatchley/espeak-sys.git
