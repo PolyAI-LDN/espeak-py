@@ -5,5 +5,14 @@ authors = ["Benjamin Levin <ben@poly-ai.com>"]
 edition = "2018"
 description = "Python bindings for a very narrow subset of espeak"
 
+[lib]
+name = "espeak_py"
+crate-type = ["cdylib"]
+
 [dependencies]
-espeak-sys = { path = "../espeak-sys" }
+espeak-sys = { path = "./espeak-sys" }
+parking_lot = "0.11"
+
+[dependencies.pyo3]
+version = "0.13.2"
+features = ["extension-module"]
