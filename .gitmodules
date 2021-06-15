@@ -3,4 +3,4 @@
 	url = git@github.com:ctatchley/espeak-sys.git
 [submodule "espeak-ng"]
 	path = espeak-ng
-	url = ./espeak-ng
+	url = git@github.com:espeak-ng/espeak-ng.git
