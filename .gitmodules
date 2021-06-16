@@ -1,6 +1,6 @@
 [submodule "espeak-sys"]
 	path = espeak-sys
-	url = git@github.com:ctatchley/espeak-sys.git
+	url = git@github.com:PolyAI-LDN/espeak-sys.git
 [submodule "espeak-ng"]
 	path = espeak-ng
 	url = git@github.com:espeak-ng/espeak-ng.git
