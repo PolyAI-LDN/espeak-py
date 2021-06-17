@@ -1,0 +1,2 @@
+[build]
+rustflags = "-L espeak-ng/src/.libs"
