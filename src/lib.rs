@@ -1,5 +1,7 @@
 use std::ffi::{CString, CStr, c_void};
-use std::ptr::{addr_of_mut, null, null_mut};
+use std::ptr::{addr_of_mut, null_mut};
+#[cfg(not(target_os = "linux"))]
+use std::ptr::null;
 
 use espeak_sys::{espeakCHARS_AUTO ,espeak_AUDIO_OUTPUT, espeak_ERROR, espeak_Initialize,
                  espeak_ListVoices, espeak_SetVoiceByName, espeak_TextToPhonemes};
@@ -44,7 +46,7 @@ fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
 fn text_to_phonemes(text: &str, language: &str) -> PyResult<String> {
     // set language
     let lang = CString::new(language).unwrap();
-    let (set_voice, to_phonemes) = *(LIB.lock());
+    let (ref set_voice, ref to_phonemes) = *(LIB.lock());
     unsafe {
         match set_voice(lang.as_ptr()) {
             espeak_ERROR::EE_OK => (),
