@@ -46,11 +46,12 @@ fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
 fn text_to_phonemes(text: &str, language: &str) -> PyResult<String> {
     // set language
     let lang = CString::new(language).unwrap();
-    let (ref set_voice, ref to_phonemes) = *(LIB.lock());
+    let (ref set_voice, ref to_phonemes) = *(LIB.lock()); // borrow from mutex to hold lock
     unsafe {
         match set_voice(lang.as_ptr()) {
             espeak_ERROR::EE_OK => (),
             espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
+            espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err("voice '{}' not found; have you installed espeak data files?")),
             _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
         }
     }
