@@ -12,7 +12,7 @@ use libc::{c_int, c_char};
 
 /// Library functions that depend on internal lib state
 type LibFuncs = (
-    unsafe extern "C" fn(*const c_char) -> espeak_ERROR,
+    unsafe extern "C" fn(name: *const c_char) -> espeak_ERROR,
     unsafe extern "C" fn(textptr: *const *const c_void, textmode: c_int, phonememode: c_int) -> *const c_char
 );
 static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_TextToPhonemes));
@@ -20,9 +20,9 @@ static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_TextToP
 #[pymodule]
 fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
     let try_paths = [
-        "/usr/lib/x86_64-linux-gnu/espeak-ng-data",
-        "/usr/local/share/espeak-data",
-        "/usr/local/share/espeak-ng-data",
+        "/usr/lib/x86_64-linux-gnu/espeak-ng-data", // linux apt install location
+        "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac brew install location
+        "/usr/local/share/espeak-ng-data", // source install location
     ];
     let mut data_path: Option<CString> = None;
     for try_path in &try_paths {
@@ -55,7 +55,7 @@ fn text_to_phonemes(text: &str, language: &str) -> PyResult<String> {
         match set_voice(lang.as_ptr()) {
             espeak_ERROR::EE_OK => (),
             espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
-            espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err("voice '{}' not found; have you installed espeak data files?")),
+            espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("voice '{}' not found; have you installed espeak data files?", language))),
             _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
         }
     }
