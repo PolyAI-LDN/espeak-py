@@ -1,4 +1,5 @@
 use std::ffi::{CString, CStr, c_void};
+use std::path::Path;
 use std::ptr::{addr_of_mut, null_mut};
 #[cfg(not(target_os = "linux"))]
 use std::ptr::null;
@@ -20,17 +21,22 @@ static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_TextToP
 
 #[pymodule]
 fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
-    let data_path;
-    let path_ptr;
-    #[cfg(target_os = "linux")]
-    {
-        data_path = CString::new("/usr/lib/x86_64-linux-gnu/espeak-ng-data")?;
-        path_ptr = data_path.as_ptr();
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        path_ptr = null();
-    }
+    let try_paths = [
+        "/usr/lib/x86_64-linux-gnu/espeak-ng-data",
+        "/usr/local/share/espeak-data",
+        "/usr/local/share/espeak-ng-data",
+    ];
+    let mut data_path: Option<CString> = None;
+    for try_path in &try_paths {
+        if Path::new(try_path).exists() {
+            data_path = Some(CString::new(*try_path)?);
+            break;
+        }
+    };
+    let path_ptr = match data_path {
+        None => return Err(PyRuntimeError::new_err("could not discover espeak data path")),
+        Some(ref c_path) => c_path.as_ptr(),
+    };
     unsafe {
         let _rate = espeak_Initialize(espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_RETRIEVAL, 0, path_ptr, 0);
     }
