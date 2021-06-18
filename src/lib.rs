@@ -1,8 +1,6 @@
 use std::ffi::{CString, CStr, c_void};
 use std::path::Path;
 use std::ptr::{addr_of_mut, null_mut};
-#[cfg(not(target_os = "linux"))]
-use std::ptr::null;
 
 use espeak_sys::{espeakCHARS_AUTO ,espeak_AUDIO_OUTPUT, espeak_ERROR, espeak_Initialize,
                  espeak_ListVoices, espeak_SetVoiceByName, espeak_TextToPhonemes};
@@ -34,7 +32,7 @@ fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
         }
     };
     let path_ptr = match data_path {
-        None => return Err(PyRuntimeError::new_err("could not discover espeak data path")),
+        None => return Err(PyRuntimeError::new_err("could not discover espeak data path; have you installed espeak data files?")),
         Some(ref c_path) => c_path.as_ptr(),
     };
     unsafe {
