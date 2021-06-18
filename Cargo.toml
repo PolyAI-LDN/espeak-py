@@ -1,9 +1,12 @@
 [package]
 name = "espeak-py"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Benjamin Levin <ben@poly-ai.com>"]
 edition = "2018"
 description = "Python bindings for a very narrow subset of espeak"
+repository = "https://github.com/PolyAI-LDN/espeak-py"
+license-file = "LICENSE"
+categories = ["text-processing", "api-bindings"]
 
 [lib]
 name = "espeak_py"
