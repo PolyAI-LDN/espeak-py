@@ -8,4 +8,7 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Rust"
 ]
+python = "^3.6"
+homepage = "https://github.com/PolyAI-LDN/espeak-py"
+repository = "https://github.com/PolyAI-LDN/espeak-py"
 license = { file = "LICENSE" }
