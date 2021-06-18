@@ -18,6 +18,7 @@ Requires Rust (and cargo) as well as GNU autotools and python packages [`maturin
 2. Build espeak-ng in-tree with:
 ```
   cd espeak-ng
+  ./autogen.sh  # First-time setup
   ./configure --without-klatt --without-speechplayer --without-mbrola --without-sonic --without-async
   make
   cd ..

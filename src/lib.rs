@@ -1,28 +1,30 @@
 use std::ffi::{CString, CStr, c_void};
 use std::path::Path;
-use std::ptr::{addr_of_mut, null_mut};
+use std::ptr::{addr_of_mut, null, null_mut};
 
-use espeak_sys::{espeakCHARS_AUTO ,espeak_AUDIO_OUTPUT, espeak_ERROR, espeak_Initialize,
-                 espeak_ListVoices, espeak_SetVoiceByName, espeak_TextToPhonemes};
+use espeak_sys::{espeakCHARS_AUTO ,espeak_AUDIO_OUTPUT, espeak_ERROR, espeak_Initialize, espeak_VOICE,
+                 espeak_ListVoices, espeak_SetVoiceByName, espeak_SetVoiceByProperties, espeak_TextToPhonemes};
 use parking_lot::{Mutex, const_mutex};
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::wrap_pyfunction;
 use libc::{c_int, c_char};
 
-/// Library functions that depend on internal lib state
+/// Library functions that depend on internal lib state and must be locked
 type LibFuncs = (
     unsafe extern "C" fn(name: *const c_char) -> espeak_ERROR,
+    unsafe extern "C" fn(voice_spec: *mut espeak_VOICE) -> espeak_ERROR,
     unsafe extern "C" fn(textptr: *const *const c_void, textmode: c_int, phonememode: c_int) -> *const c_char
 );
-static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_TextToPhonemes));
+static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_SetVoiceByProperties, espeak_TextToPhonemes));
 
 #[pymodule]
 fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
     let try_paths = [
         "/usr/lib/x86_64-linux-gnu/espeak-ng-data", // linux apt install location
         "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac brew install location
-        "/usr/local/share/espeak-ng-data", // source install location
+        "/usr/local/share/espeak-ng-data", // source install locations
+        "/usr/share/espeak-ng-data",
     ];
     let mut data_path: Option<CString> = None;
     for try_path in &try_paths {
@@ -39,26 +41,49 @@ fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
         let _rate = espeak_Initialize(espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_RETRIEVAL, 0, path_ptr, 0);
     }
     drop(data_path);
-    m.add_function(wrap_pyfunction!(text_to_phonemes, m)?).unwrap();
-    m.add_function(wrap_pyfunction!(list_voices, m)?).unwrap();
+    m.add_function(wrap_pyfunction!(text_to_phonemes, m)?)?;
+    m.add_function(wrap_pyfunction!(list_voice_names, m)?)?;
+    m.add_function(wrap_pyfunction!(list_languages, m)?)?;
     Ok(())
 }
 
-/// Convert a string to IPA. Raises RuntimeError if espeak doesn't have the specified language.
+/// Convert a string to IPA. Raises RuntimeError if espeak doesn't have the requested voice.
 #[pyfunction]
-#[text_signature = "(text, language, /)"]
-fn text_to_phonemes(text: &str, language: &str) -> PyResult<String> {
-    // set language
-    let lang = CString::new(language).unwrap();
-    let (ref set_voice, ref to_phonemes) = *(LIB.lock()); // borrow from mutex to hold lock
-    unsafe {
-        match set_voice(lang.as_ptr()) {
-            espeak_ERROR::EE_OK => (),
-            espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
-            espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("voice '{}' not found; have you installed espeak data files?", language))),
-            _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
+#[text_signature = "(text, language=None, voice_name=None, /)"]
+fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>) -> PyResult<String> {
+    // borrow from mutex to lock entire lib until we're finished
+    let (ref set_voice_by_name, ref set_voice_by_props, ref to_phonemes) = *(LIB.lock());
+    match (language, voice_name) {
+        (None, None) | (Some(_), Some(_)) => {
+            return Err(PyRuntimeError::new_err("exactly one of 'language' and 'voice_name' must be passed"))
+        }
+        (None, Some(name)) => { // set voice by name
+            let c_name = CString::new(name).unwrap();
+            unsafe {
+                match set_voice_by_name(c_name.as_ptr()) {
+                    espeak_ERROR::EE_OK => (),
+                    espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
+                    espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("voice '{}' not found; have you installed espeak data files?", name))),
+                    _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
+                }
+            }
+            drop(c_name);
+        }
+        (Some(lang), None) => { // set voice by language
+            let c_lang = CString::new(lang).unwrap();
+            let mut voice_template = espeak_VOICE::new(null(), c_lang.as_ptr(), null(), 0, 0, 0);
+            unsafe {
+                match set_voice_by_props(addr_of_mut!(voice_template)) {
+                    espeak_ERROR::EE_OK => (),
+                    espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
+                    espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("language '{}' not found; have you installed espeak data files?", lang))),
+                    _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
+                }
+            }
+            drop(lang);
         }
     }
+
     // run conversion
     let c_text = CString::new(text).unwrap();
     let mut c_text_ptr = c_text.as_ptr() as *const c_void;
@@ -85,13 +110,46 @@ fn text_to_phonemes(text: &str, language: &str) -> PyResult<String> {
 /// List the names of the voices supported by this installation of espeak
 #[pyfunction]
 #[text_signature = "(/)"]
-fn list_voices() -> PyResult<Vec<String>> {
+fn list_voice_names() -> PyResult<Vec<String>> {
     let mut result = Vec::new();
     let mut voice_arr = unsafe { espeak_ListVoices(null_mut()) };
     while unsafe{ !(*voice_arr).is_null() } {
         let c_name = unsafe { CStr::from_ptr((**voice_arr).name) };
         let name = c_name.to_str()?;
         result.push(name.to_owned());
+        voice_arr = voice_arr.wrapping_add(1);
+    }
+    Ok(result)
+}
+
+/// List the language codes supported by this installation of espeak
+#[pyfunction]
+#[text_signature = "(/)"]
+fn list_languages() -> PyResult<Vec<String>> {
+    let mut result = Vec::new();
+    let mut voice_arr = unsafe { espeak_ListVoices(null_mut()) };
+    while unsafe{ !(*voice_arr).is_null() } {
+        let mut langs_ptr = unsafe { (**voice_arr).languages };
+        while unsafe { *langs_ptr != 0 } {
+            // get priority byte
+            let _priority = unsafe { *langs_ptr };
+            langs_ptr = langs_ptr.wrapping_add(1);
+            // copy all language strings to rust heap
+            let lang_start_ptr = langs_ptr as *const u8;
+            let mut num_bytes: usize = 0;
+            while unsafe { *langs_ptr != 0 } {
+                num_bytes += 1;
+                langs_ptr = langs_ptr.wrapping_add(1);
+            }
+            num_bytes += 1;
+            let lang_slice = unsafe { std::slice::from_raw_parts(lang_start_ptr, num_bytes) };
+            let lang_cstr = match CStr::from_bytes_with_nul(lang_slice) {
+                Ok(cstr) => cstr,
+                Err(_) => return Err(PyRuntimeError::new_err("espeak language string decoding error")),
+            };
+            let lang_str = lang_cstr.to_str()?;
+            result.push(lang_str.to_owned());
+        }
         voice_arr = voice_arr.wrapping_add(1);
     }
     Ok(result)
