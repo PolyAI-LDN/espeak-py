@@ -1,9 +1,11 @@
 use std::ffi::{CString, CStr, c_void};
 use std::path::Path;
 use std::ptr::{addr_of_mut, null, null_mut};
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use espeak_sys::{espeakCHARS_AUTO ,espeak_AUDIO_OUTPUT, espeak_ERROR, espeak_Initialize, espeak_VOICE,
-                 espeak_ListVoices, espeak_SetVoiceByName, espeak_SetVoiceByProperties, espeak_TextToPhonemes};
+use espeak_sys::{espeakCHARS_AUTO, espeakINITIALIZE_DONT_EXIT, espeak_AUDIO_OUTPUT, espeak_ERROR,
+    espeak_Initialize, espeak_TextToPhonemes, espeak_SetVoiceByProperties, espeak_SetVoiceByName,
+    espeak_ListVoices ,espeak_VOICE};
 use parking_lot::{Mutex, const_mutex};
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
@@ -17,42 +19,53 @@ type LibFuncs = (
     unsafe extern "C" fn(textptr: *const *const c_void, textmode: c_int, phonememode: c_int) -> *const c_char
 );
 static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_SetVoiceByProperties, espeak_TextToPhonemes));
+static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
-#[pymodule]
-fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
-    let try_paths = [
-        "/usr/lib/x86_64-linux-gnu/espeak-ng-data", // linux apt install location
-        "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac brew install location
-        "/usr/local/share/espeak-ng-data", // source install locations
-        "/usr/share/espeak-ng-data",
-    ];
-    let mut data_path: Option<CString> = None;
-    for try_path in &try_paths {
-        if Path::new(try_path).exists() {
-            data_path = Some(CString::new(*try_path)?);
-            break;
+fn ensure_initialized() -> PyResult<()> {
+    if !INITIALIZED.load(Ordering::Acquire) {
+        let try_paths = [
+            "/usr/lib/x86_64-linux-gnu/espeak-ng-data", // linux apt install location
+            "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac brew install location
+            "/usr/local/share/espeak-ng-data", // source install locations
+            "/usr/share/espeak-ng-data",
+        ];
+        let mut data_path: Option<CString> = None;
+        for try_path in &try_paths {
+            if Path::new(try_path).exists() {
+                data_path = Some(CString::new(*try_path)?);
+                break;
+            }
+        };
+
+        #[cfg(target_os = "macos")]
+        let msg = r#"Error while initializing espeak.  If it's not installed, try running:
+        `brew install anarchivist/espeak-ng/espeak-ng --without-pcaudiolib --without-waywardgeek-sonic`"#;
+        #[cfg(target_os = "linux")]
+        let msg = r#"Error while initializing espeak. If you haven't installed the data files, run:
+        `sudo apt install espeak-ng-data`"#;
+        let path_ptr = match data_path {
+            None => return Err(PyRuntimeError::new_err(msg)),
+            Some(ref c_path) => c_path.as_ptr(),
+        };
+        let rate = unsafe {
+            espeak_Initialize(espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_RETRIEVAL, 0, path_ptr, espeakINITIALIZE_DONT_EXIT)
+        };
+        if rate == -1 {
+            return Err(PyRuntimeError::new_err(msg));
         }
-    };
-    let path_ptr = match data_path {
-        None => return Err(PyRuntimeError::new_err("could not discover espeak data path; have you installed espeak data files?")),
-        Some(ref c_path) => c_path.as_ptr(),
-    };
-    unsafe {
-        let _rate = espeak_Initialize(espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_RETRIEVAL, 0, path_ptr, 0);
+        drop(data_path); // ensure data_path outlives path_ptr
+        INITIALIZED.store(true, Ordering::Release);
     }
-    drop(data_path);
-    m.add_function(wrap_pyfunction!(text_to_phonemes, m)?)?;
-    m.add_function(wrap_pyfunction!(list_voice_names, m)?)?;
-    m.add_function(wrap_pyfunction!(list_languages, m)?)?;
     Ok(())
 }
 
 /// Convert a string to IPA. Raises RuntimeError if espeak doesn't have the requested voice.
 #[pyfunction]
 #[text_signature = "(text, language=None, voice_name=None, /)"]
-fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>) -> PyResult<String> {
+pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>) -> PyResult<String> {
     // borrow from mutex to lock entire lib until we're finished
     let (ref set_voice_by_name, ref set_voice_by_props, ref to_phonemes) = *(LIB.lock());
+    ensure_initialized()?;
     match (language, voice_name) {
         (None, None) | (Some(_), Some(_)) => {
             return Err(PyRuntimeError::new_err("exactly one of 'language' and 'voice_name' must be passed"))
@@ -76,7 +89,7 @@ fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>
                 match set_voice_by_props(addr_of_mut!(voice_template)) {
                     espeak_ERROR::EE_OK => (),
                     espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
-                    espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("language '{}' not found; have you installed espeak data files?", lang))),
+                    espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("language '{}' not found; have you installed espeak data files? see https://github.com/PolyAI-LDN/espeak-py", lang))),
                     _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
                 }
             }
@@ -110,7 +123,8 @@ fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>
 /// List the names of the voices supported by this installation of espeak
 #[pyfunction]
 #[text_signature = "(/)"]
-fn list_voice_names() -> PyResult<Vec<String>> {
+pub fn list_voice_names() -> PyResult<Vec<String>> {
+    ensure_initialized()?;
     let mut result = Vec::new();
     let mut voice_arr = unsafe { espeak_ListVoices(null_mut()) };
     while unsafe{ !(*voice_arr).is_null() } {
@@ -125,7 +139,8 @@ fn list_voice_names() -> PyResult<Vec<String>> {
 /// List the language codes supported by this installation of espeak
 #[pyfunction]
 #[text_signature = "(/)"]
-fn list_languages() -> PyResult<Vec<String>> {
+pub fn list_languages() -> PyResult<Vec<String>> {
+    ensure_initialized()?;
     let mut result = Vec::new();
     let mut voice_arr = unsafe { espeak_ListVoices(null_mut()) };
     while unsafe{ !(*voice_arr).is_null() } {
@@ -153,4 +168,12 @@ fn list_languages() -> PyResult<Vec<String>> {
         voice_arr = voice_arr.wrapping_add(1);
     }
     Ok(result)
+}
+
+#[pymodule]
+fn espeak_py(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(list_voice_names, m)?)?;
+    m.add_function(wrap_pyfunction!(list_languages, m)?)?;
+    m.add_function(wrap_pyfunction!(text_to_phonemes, m)?)?;
+    Ok(())
 }
