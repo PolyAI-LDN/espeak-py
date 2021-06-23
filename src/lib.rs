@@ -31,7 +31,7 @@ static INITIALIZED: AtomicBool = AtomicBool::new(false);
 fn ensure_initialized() -> PyResult<()> {
     if !INITIALIZED.load(Ordering::Acquire) {
         let lib = LIB.lock();
-        if INITIALIZED.load(Ordering::Acquire) {
+        if INITIALIZED.load(Ordering::Acquire) { // condvar-style double check
             return Ok(())
         }
         let try_paths = [
@@ -75,8 +75,8 @@ fn ensure_initialized() -> PyResult<()> {
 #[text_signature = "(text, language=None, voice_name=None, /)"]
 pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>) -> PyResult<String> {
     // borrow from mutex to lock entire lib until we're finished
-    let lib = LIB.lock();
     ensure_initialized()?;
+    let lib = LIB.lock();
     match (language, voice_name) {
         (None, None) | (Some(_), Some(_)) => {
             return Err(PyRuntimeError::new_err("exactly one of 'language' and 'voice_name' must be passed"))
