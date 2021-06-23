@@ -13,16 +13,27 @@ use pyo3::wrap_pyfunction;
 use libc::{c_int, c_char};
 
 /// Library functions that depend on internal lib state and must be locked
-type LibFuncs = (
-    unsafe extern "C" fn(name: *const c_char) -> espeak_ERROR,
-    unsafe extern "C" fn(voice_spec: *mut espeak_VOICE) -> espeak_ERROR,
-    unsafe extern "C" fn(textptr: *const *const c_void, textmode: c_int, phonememode: c_int) -> *const c_char
-);
-static LIB: Mutex<LibFuncs> = const_mutex((espeak_SetVoiceByName, espeak_SetVoiceByProperties, espeak_TextToPhonemes));
+struct EspeakLib {
+    initialize: unsafe extern "C" fn(output: espeak_AUDIO_OUTPUT, buflength: c_int, path: *const c_char, options: c_int) -> c_int,
+    set_voice_by_name: unsafe extern "C" fn(name: *const c_char) -> espeak_ERROR,
+    set_voice_by_props: unsafe extern "C" fn(voice_spec: *mut espeak_VOICE) -> espeak_ERROR,
+    text_to_phonemes: unsafe extern "C" fn(textptr: *const *const c_void, textmode: c_int, phonememode: c_int) -> *const c_char,
+}
+static LIB: Mutex<EspeakLib> = const_mutex(EspeakLib {
+    initialize: espeak_Initialize,
+    set_voice_by_name: espeak_SetVoiceByName,
+    set_voice_by_props: espeak_SetVoiceByProperties,
+    text_to_phonemes: espeak_TextToPhonemes,
+});
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
+/// Lazily initialize the library, but ensure we only do it once
 fn ensure_initialized() -> PyResult<()> {
     if !INITIALIZED.load(Ordering::Acquire) {
+        let lib = LIB.lock();
+        if INITIALIZED.load(Ordering::Acquire) {
+            return Ok(())
+        }
         let try_paths = [
             "/usr/lib/x86_64-linux-gnu/espeak-ng-data", // linux apt install location
             "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac brew install location
@@ -48,7 +59,7 @@ fn ensure_initialized() -> PyResult<()> {
             Some(ref c_path) => c_path.as_ptr(),
         };
         let rate = unsafe {
-            espeak_Initialize(espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_RETRIEVAL, 0, path_ptr, espeakINITIALIZE_DONT_EXIT)
+            (lib.initialize)(espeak_AUDIO_OUTPUT::AUDIO_OUTPUT_RETRIEVAL, 0, path_ptr, espeakINITIALIZE_DONT_EXIT)
         };
         if rate == -1 {
             return Err(PyRuntimeError::new_err(msg));
@@ -64,7 +75,7 @@ fn ensure_initialized() -> PyResult<()> {
 #[text_signature = "(text, language=None, voice_name=None, /)"]
 pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>) -> PyResult<String> {
     // borrow from mutex to lock entire lib until we're finished
-    let (ref set_voice_by_name, ref set_voice_by_props, ref to_phonemes) = *(LIB.lock());
+    let lib = LIB.lock();
     ensure_initialized()?;
     match (language, voice_name) {
         (None, None) | (Some(_), Some(_)) => {
@@ -73,27 +84,25 @@ pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&
         (None, Some(name)) => { // set voice by name
             let c_name = CString::new(name).unwrap();
             unsafe {
-                match set_voice_by_name(c_name.as_ptr()) {
+                match (lib.set_voice_by_name)(c_name.as_ptr()) {
                     espeak_ERROR::EE_OK => (),
                     espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
                     espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("voice '{}' not found; have you installed espeak data files?", name))),
                     _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
                 }
             }
-            drop(c_name);
         }
         (Some(lang), None) => { // set voice by language
             let c_lang = CString::new(lang).unwrap();
             let mut voice_template = espeak_VOICE::new(null(), c_lang.as_ptr(), null(), 0, 0, 0);
             unsafe {
-                match set_voice_by_props(addr_of_mut!(voice_template)) {
+                match (lib.set_voice_by_props)(addr_of_mut!(voice_template)) {
                     espeak_ERROR::EE_OK => (),
                     espeak_ERROR::EE_INTERNAL_ERROR => return Err(PyRuntimeError::new_err("espeak internal error while setting language")),
                     espeak_ERROR::EE_NOT_FOUND => return Err(PyRuntimeError::new_err(format!("language '{}' not found; have you installed espeak data files? see https://github.com/PolyAI-LDN/espeak-py", lang))),
                     _ => return Err(PyRuntimeError::new_err("espeak unknown error while setting language")),
                 }
             }
-            drop(lang);
         }
     }
 
@@ -105,7 +114,7 @@ pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&
     let mut ipas = String::new();
     loop {
         let phonemes_ptr = unsafe {
-            to_phonemes(espeak_text_ptr, espeakCHARS_AUTO as _, phonememode)
+            (lib.text_to_phonemes)(espeak_text_ptr, espeakCHARS_AUTO as _, phonememode)
         };
         // copy phonemes into Rust heap
         let phonemes_cstr = unsafe { CStr::from_ptr(phonemes_ptr) };
