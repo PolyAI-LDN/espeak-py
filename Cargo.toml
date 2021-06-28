@@ -1,6 +1,6 @@
 [package]
 name = "espeak-py"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Benjamin Levin <ben@poly-ai.com>"]
 edition = "2018"
 description = "Python bindings for a narrow subset of espeak"
