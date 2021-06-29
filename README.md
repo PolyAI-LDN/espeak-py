@@ -8,7 +8,7 @@ Currently, this only provides text phonemization functions, not invoking full TT
 On Linux, espeak is statically linked into the built wheel, but there is a runtime dependency on espeak-ng-data.
 This can be satisfied by `sudo apt install espeak-ng-data` (or the equivalent for your distro).
 
-On Mac the data and necessary shared library can be installed with `brew install anarchivist/espeak-ng/espeak-ng --without-pcaudiolib --without-waywardgeek-sonic`. You will need to have XCode tools and GNU autotools installed (if they aren't already).
+On Mac the data and necessary shared library can be installed with `brew tap bplevin36/espeak-ng && brew install espeak-ng --without-pcaudiolib --without-waywardgeek-sonic`. You will need to have XCode tools and GNU autotools installed (if they aren't already).
 
 ## Usage Example
 ```
