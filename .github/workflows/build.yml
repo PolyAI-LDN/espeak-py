@@ -7,7 +7,7 @@
 #    -  to limit the number of ubuntu variants
 #    -  do the rust build step
 #    -  to add the RUSTFLAGS environment variable
-#    -  to specify python version
+#    -  to specify python version used by maturin
 
 name: CI
 
@@ -30,7 +30,6 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
-        python-version: [3.9]
         platform:
           - runner: ubuntu-20.04
             target: x86_64
@@ -39,8 +38,6 @@ jobs:
         with:
             submodules: true
       - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - name: Build bindings
         run: |
           tools/build.sh
@@ -50,7 +47,7 @@ jobs:
             RUSTFLAGS: -L espeak-ng/src/.libs
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --interpreter python3.9 --interpreter python3.11
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
@@ -63,7 +60,6 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
-        python-version: [3.9]
         platform:
           - runner: macos-13
             target: x86_64
@@ -74,8 +70,6 @@ jobs:
         with:
             submodules: true
       - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - name: Build bindings
         run: |
             tools/build.sh
@@ -85,7 +79,7 @@ jobs:
             RUSTFLAGS: -L espeak-ng/src/.libs
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --interpreter python3.9 --interpreter python3.11
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
