@@ -30,6 +30,7 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
+        python-version: [3.9]
         platform:
           - runner: ubuntu-latest
             target: x86_64
@@ -38,6 +39,8 @@ jobs:
         with:
             submodules: true
       - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Build bindings
         run: |
           tools/build.sh
@@ -60,6 +63,7 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
+        python-version: [3.9]
         platform:
           - runner: macos-12
             target: x86_64
@@ -70,6 +74,8 @@ jobs:
         with:
             submodules: true
       - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Build bindings
         run: |
             tools/build.sh
