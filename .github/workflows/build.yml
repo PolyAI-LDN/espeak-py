@@ -65,7 +65,7 @@ jobs:
           platform:
           - runner: macos-13
             target: x86_64
-            python_args: --interpreter Users/runner/hostedtoolcache/Python/3.9.20/x64/bin/python3.9 --interpreter /usr/local/bin/python3.11
+            python_args: --interpreter /Users/runner/hostedtoolcache/Python/3.9.20/x64/bin/python3.9 --interpreter /usr/local/bin/python3.11
           - runner: macos-14
             target: aarch64
             python_args: --interpreter python3.9 --interpreter python3.11
