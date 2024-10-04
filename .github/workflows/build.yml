@@ -32,7 +32,7 @@ jobs:
       matrix:
         python-version: [3.9]
         platform:
-          - runner: ubuntu-latest
+          - runner: ubuntu-20.04
             target: x86_64
     steps:
       - uses: actions/checkout@v4
