@@ -5,7 +5,8 @@ PARENT_DIR=$(dirname $SCRIPT_DIR)
 
 echo $PARENT_DIR
 cd $PARENT_DIR/espeak-ng
-touch ChangeLog.md
+pwd
+touch $PARENT_DIR/espeak-ng/ChangeLog.md
 ls
 ./autogen.sh
 ./configure --without-klatt --without-speechplayer --without-mbrola --without-sonic --without-async
