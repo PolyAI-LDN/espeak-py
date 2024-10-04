@@ -61,11 +61,14 @@ jobs:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
-        platform:
+          # Fix up the python versions that maturin detects, as some break
+          platform:
           - runner: macos-13
             target: x86_64
+            python_args: --interpreter /usr/local/bin/python3.9 --interpreter /usr/local/bin/python3.11
           - runner: macos-14
             target: aarch64
+            python_args: --interpreter python3.9 --interpreter python3.11
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,8 +83,7 @@ jobs:
             RUSTFLAGS: -L espeak-ng/src/.libs
         with:
           target: ${{ matrix.platform.target }}
-          # only CPython, and in different locations, so just specify the executable without path
-          args: --release --out dist --interpreter python3.9 --interpreter python3.11
+          args: --release --out dist ${{ matrix.platform.python_args }}
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
