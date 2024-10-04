@@ -47,7 +47,8 @@ jobs:
             RUSTFLAGS: -L espeak-ng/src/.libs
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --interpreter python3.9 --interpreter python3.11
+          # only CPython and PyPy (which fail) so specify the full path to the CPythons
+          args: --release --out dist --interpreter /usr/local/bin/python3.9 --interpreter /usr/local/bin/python3.11
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
@@ -79,6 +80,7 @@ jobs:
             RUSTFLAGS: -L espeak-ng/src/.libs
         with:
           target: ${{ matrix.platform.target }}
+          # only CPython, and in different locations, so just specify the executable without path
           args: --release --out dist --interpreter python3.9 --interpreter python3.11
           sccache: 'true'
       - name: Upload wheels
