@@ -12,5 +12,5 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 ls
 ./autogen.sh
-./configure --without-klatt --without-speechplayer --without-mbrola --without-sonic --without-async
+./configure --without-klatt --without-pcaudiolib --without-mbrola --without-sonic --without-async
 make
