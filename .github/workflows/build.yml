@@ -14,12 +14,11 @@ name: CI
 on:
   push:
     branches:
-      - main
       - master
     tags:
       - '*'
   pull_request:
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -30,7 +29,7 @@ jobs:
     strategy:
       matrix:
         platform:
-          - runner: ubuntu-20.04
+          - runner: ubuntu-22.04
             target: x86_64
     steps:
       - uses: actions/checkout@v4
