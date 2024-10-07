@@ -36,7 +36,8 @@ fn ensure_initialized() -> PyResult<()> {
         }
         let try_paths = [
             "/usr/lib/x86_64-linux-gnu/espeak-ng-data", // linux apt install location
-            "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac brew install location
+            "/opt/homebrew/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac ARM brew install location
+            "/usr/local/Cellar/espeak-ng/1.50/share/espeak-ng-data", // mac x64 brew install location
             "/usr/local/share/espeak-ng-data", // source install locations
             "/usr/share/espeak-ng-data",
         ];
@@ -50,7 +51,7 @@ fn ensure_initialized() -> PyResult<()> {
 
         #[cfg(target_os = "macos")]
         let msg = r#"Error while initializing espeak.  If it's not installed, try running:
-        `brew install anarchivist/espeak-ng/espeak-ng --without-pcaudiolib --without-waywardgeek-sonic`"#;
+        `brew tap bplevin36/espeak-ng && brew install bplevin36/espeak-ng/espeak-ng --without-pcaudiolib --without-waywardgeek-sonic`"#;
         #[cfg(target_os = "linux")]
         let msg = r#"Error while initializing espeak. If you haven't installed the data files, run:
         `sudo apt install espeak-ng-data`"#;
