@@ -11,10 +11,11 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo "Changelog dummy" > ChangeLog.md
 fi
 ls
-./autogen.sh
-./configure --without-klatt --without-pcaudiolib --without-mbrola --without-sonic --without-async
 
 # Fix error on Ubuntu 22.04+
 # See https://stackoverflow.com/questions/76060903/gcc-multiple-definition-of-error-on-ubuntu-22-04-after-updating-from-ubuntu-2
 export CFLAGS="-fcommon"
+
+./autogen.sh
+./configure --without-klatt --without-pcaudiolib --without-mbrola --without-sonic --without-async
 make
