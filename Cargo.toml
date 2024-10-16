@@ -1,6 +1,6 @@
 [package]
 name = "espeak-py"
-version = "0.1.8"
+version = "0.1.9"
 authors = ["Benjamin Levin <ben@poly-ai.com>"]
 edition = "2018"
 description = "Python bindings for a narrow subset of espeak"
@@ -18,5 +18,5 @@ libc = "0.2"
 parking_lot = "0.11"
 
 [dependencies.pyo3]
-version = "0.13.2"
+version = "0.22.5"
 features = ["extension-module"]
