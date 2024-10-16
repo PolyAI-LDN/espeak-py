@@ -73,7 +73,7 @@ fn ensure_initialized() -> PyResult<()> {
 
 /// Convert a string to IPA. Raises RuntimeError if espeak doesn't have the requested voice.
 #[pyfunction]
-#[text_signature = "(text, language=None, voice_name=None, /)"]
+#[pyo3(text_signature = "(text, language=None, voice_name=None, /)")]
 pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&str>) -> PyResult<String> {
     // borrow from mutex to lock entire lib until we're finished
     ensure_initialized()?;
@@ -132,7 +132,7 @@ pub fn text_to_phonemes(text: &str, language: Option<&str>, voice_name: Option<&
 
 /// List the names of the voices supported by this installation of espeak
 #[pyfunction]
-#[text_signature = "(/)"]
+#[py03(text_signature = "(/)")]
 pub fn list_voice_names() -> PyResult<Vec<String>> {
     ensure_initialized()?;
     let mut result = Vec::new();
@@ -148,7 +148,7 @@ pub fn list_voice_names() -> PyResult<Vec<String>> {
 
 /// List the language codes supported by this installation of espeak
 #[pyfunction]
-#[text_signature = "(/)"]
+#[py03(text_signature = "(/)")]
 pub fn list_languages() -> PyResult<Vec<String>> {
     ensure_initialized()?;
     let mut result = Vec::new();
