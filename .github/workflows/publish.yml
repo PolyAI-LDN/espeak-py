@@ -28,4 +28,4 @@ jobs:
     - name: List artifacts downloaded
       run: ls -R dist
     - name: Publish package
-      uses: pypa/gh-action-pypi-publish@release/v1.8
+      uses: pypa/gh-action-pypi-publish@release/v1.13
